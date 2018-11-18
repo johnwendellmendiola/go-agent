@@ -1,10 +1,15 @@
 package newrelic
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -398,6 +403,96 @@ func (txn *txn) WriteHeader(code int) {
 	}
 
 	headersJustWritten(txn, code, hdr)
+}
+
+// https://source.datanerd.us/agents/agent-specs/blob/master/Lambda.md
+type serverlessPayload struct {
+	Metadata struct {
+		ARN                  string `json:"arn,omitempty"`
+		ProtocolVersion      int    `json:"protocol_version"`
+		ExecutionEnvironment string `json:"execution_environment,omitempty"`
+		AgentVersion         string `json:"agent_version"`
+	} `json:"metadata"`
+	Data map[string]json.RawMessage `json:"data"`
+}
+
+func (txn *txn) serverlessPayloadJSON(executionEnv string) ([]byte, error) {
+	harvest := internal.NewHarvest(txn.Start)
+	txn.MergeIntoHarvest(harvest)
+	payloads := harvest.Payloads(false)
+	harvestPayloads := make(map[string]json.RawMessage, len(payloads))
+	for _, p := range payloads {
+		agentRunID := ""
+		cmd := p.EndpointMethod()
+		data, err := p.Data(agentRunID, txn.Stop)
+		if err != nil {
+			txn.Config.Logger.Error("error creating payload json", map[string]interface{}{
+				"command": cmd,
+				"error":   err.Error(),
+			})
+			continue
+		}
+		if nil == data {
+			continue
+		}
+		// NOTE!  This code relies on the fact that each payload is
+		// using a different endpoint method.  Sometimes the transaction
+		// events payload might be split, but since there is only one
+		// transaction event per serverless transaction, that's not an
+		// issue.  Likewise, if we ever split normal transaction events
+		// apart from synthetics events, the transaction will either be
+		// normal or synthetic, so that won't be an issue.
+		harvestPayloads[cmd] = json.RawMessage(data)
+	}
+	var p serverlessPayload
+	p.Metadata.ProtocolVersion = internal.ProcotolVersion
+	p.Metadata.AgentVersion = Version
+	p.Metadata.ExecutionEnvironment = executionEnv
+	p.Metadata.ARN = txn.Attrs.Agent.StringVal(internal.AttributeAWSLambdaARN)
+	p.Data = harvestPayloads
+
+	return json.Marshal(p)
+}
+
+func serverlessJSON(txn *txn, executionEnv string) ([]byte, error) {
+	innards, err := txn.serverlessPayloadJSON(executionEnv)
+	if nil != err {
+		return nil, err
+	}
+
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+	gz.Write(innards)
+	gz.Flush()
+	gz.Close()
+
+	return json.Marshal([]interface{}{
+		1,
+		"NR_LAMBDA_MONITORING",
+		base64.StdEncoding.EncodeToString(b.Bytes()),
+	})
+}
+
+var (
+	_ serverlessTransaction = &txn{}
+)
+
+type serverlessTransaction interface {
+	// serverlessPayloadJSON is used for testing.
+	serverlessPayloadJSON(executionEnv string) ([]byte, error)
+	// serverlessDump writes the JSON to stdout.
+	serverlessDump()
+}
+
+func (txn *txn) serverlessDump() {
+	js, err := serverlessJSON(txn, os.Getenv("AWS_EXECUTION_ENV"))
+	if err != nil {
+		txn.Config.Logger.Error("error creating serverless json", map[string]interface{}{
+			"error": err.Error(),
+		})
+	} else {
+		fmt.Println(string(js))
+	}
 }
 
 func (txn *txn) End() error {
@@ -806,8 +901,10 @@ func (txn *txn) CreateDistributedTracePayload() (payload DistributedTracePayload
 		return
 	}
 
-	if "" == txn.Reply.PrimaryAppID {
-		// Return a shimPayload if the application is not yet connected.
+	if "" == txn.Reply.AccountID || "" == txn.Reply.TrustedAccountKey {
+		// We can't create a payload:  The application is not yet
+		// connected or serverless distributed tracing configuration has
+		// not provided.
 		return
 	}
 
@@ -884,6 +981,13 @@ func (txn *txn) acceptDistributedTracePayloadLocked(t TransportType, p interface
 		return nil
 	}
 
+	if "" == txn.Reply.AccountID || "" == txn.Reply.TrustedAccountKey {
+		// We can't accept a payload:  The application is not yet
+		// connected or serverless distributed tracing configuration has
+		// not provided.
+		return nil
+	}
+
 	payload, err := internal.AcceptPayload(p)
 	if nil != err {
 		if _, ok := err.(internal.ErrPayloadParse); ok {
@@ -947,4 +1051,20 @@ func (txn *txn) acceptDistributedTracePayloadLocked(t TransportType, p interface
 	txn.AcceptPayloadSuccess = true
 
 	return nil
+}
+
+var (
+	// Ensure that txn implements AddAgentAttributer to avoid breaking
+	// integration package type assertions.
+	_ internal.AddAgentAttributer = &txn{}
+)
+
+func (txn *txn) AddAgentAttribute(id internal.AgentAttributeID, stringVal string, otherVal interface{}) {
+	txn.Lock()
+	defer txn.Unlock()
+
+	if txn.finished {
+		return
+	}
+	txn.Attrs.Agent.Add(id, stringVal, otherVal)
 }

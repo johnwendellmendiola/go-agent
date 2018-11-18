@@ -200,6 +200,16 @@ type Config struct {
 		// Enabled controls whether runtime statistics are captured.
 		Enabled bool
 	}
+
+	// ServerlessMode contains fields which control behavior when running in
+	// AWS Lambda.
+	ServerlessMode struct {
+		Enabled        bool
+		ApdexThreshold time.Duration
+		AccountID      string
+		TrustKey       string
+		PrimaryAppID   string
+	}
 }
 
 // AttributeDestinationConfig controls the attributes included with errors and
@@ -255,6 +265,9 @@ func NewConfig(appname, license string) Config {
 	c.DatastoreTracer.SlowQuery.Enabled = true
 	c.DatastoreTracer.SlowQuery.Threshold = 10 * time.Millisecond
 
+	c.ServerlessMode.ApdexThreshold = 500 * time.Millisecond
+	c.ServerlessMode.Enabled = false
+
 	return c
 }
 
@@ -275,7 +288,7 @@ var (
 // Validate checks the config for improper fields.  If the config is invalid,
 // newrelic.NewApplication returns an error.
 func (c Config) Validate() error {
-	if c.Enabled {
+	if c.Enabled && !c.ServerlessMode.Enabled {
 		if len(c.License) != licenseLength {
 			return errLicenseLen
 		}
@@ -285,7 +298,7 @@ func (c Config) Validate() error {
 			return errLicenseLen
 		}
 	}
-	if "" == c.AppName && c.Enabled {
+	if "" == c.AppName && c.Enabled && !c.ServerlessMode.Enabled {
 		return errAppNameMissing
 	}
 	if c.HighSecurity && "" != c.SecurityPoliciesToken {

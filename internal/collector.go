@@ -297,7 +297,7 @@ func ConnectAttempt(config ConnectJSONCreator, securityPoliciesToken string, cs 
 
 	reply.Reply.PreconnectReply = preconnect.Preconnect
 
-	reply.Reply.AdaptiveSampler = newAdaptiveSampler(adaptiveSamplerInput{
+	reply.Reply.AdaptiveSampler = NewAdaptiveSampler(AdaptiveSamplerInput{
 		Period: time.Duration(reply.Reply.SamplingTargetPeriodInSeconds) * time.Second,
 		Target: reply.Reply.SamplingTarget,
 	}, time.Now())

@@ -1,5 +1,9 @@
 ## ChangeLog
 
+* Added support for AWS Lambda in the new
+[nrlambda](https://godoc.org/github.com/newrelic/go-agent/_integrations/nrlambda)
+package.
+
 ## 2.3.0
 
 * Added support for [Echo](https://echo.labstack.com) in the new `nrecho`

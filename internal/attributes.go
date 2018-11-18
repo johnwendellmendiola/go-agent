@@ -28,6 +28,10 @@ const (
 	attributeResponseHeadersContentType
 	attributeResponseHeadersContentLength
 	attributeResponseCode
+	AttributeAWSRequestID
+	AttributeAWSLambdaARN
+	AttributeAWSLambdaColdStart
+	AttributeAWSLambdaEventSourceARN
 )
 
 var (
@@ -48,6 +52,10 @@ var (
 		attributeResponseHeadersContentType:   {name: "response.headers.contentType", defaultDests: usualDests},
 		attributeResponseHeadersContentLength: {name: "response.headers.contentLength", defaultDests: usualDests},
 		attributeResponseCode:                 {name: "httpResponseCode", defaultDests: usualDests},
+		AttributeAWSRequestID:                 {name: "aws.requestId", defaultDests: usualDests},
+		AttributeAWSLambdaARN:                 {name: "aws.lambda.arn", defaultDests: usualDests},
+		AttributeAWSLambdaColdStart:           {name: "aws.lambda.coldStart", defaultDests: usualDests},
+		AttributeAWSLambdaEventSourceARN:      {name: "aws.lambda.eventSource.arn", defaultDests: usualDests},
 	}
 )
 
@@ -239,8 +247,21 @@ type agentAttributeValue struct {
 
 type agentAttributes map[AgentAttributeID]agentAttributeValue
 
-// Add is used to add agent attributes.  Only one of stringVal and otherVal
-// should be populated.  Since most agent attribute values are strings,
+func (attr agentAttributes) StringVal(id AgentAttributeID) string {
+	if v, ok := attr[id]; ok {
+		return v.stringVal
+	}
+	return ""
+}
+
+// AddAgentAttributer allows instrumentation to add agent attributes without
+// exposing a Transaction method.
+type AddAgentAttributer interface {
+	AddAgentAttribute(id AgentAttributeID, stringVal string, otherVal interface{})
+}
+
+// Add is used to add agent attributes.  Only one of stringVal and
+// otherVal should be populated.  Since most agent attribute values are strings,
 // stringVal exists to avoid allocations.
 func (attr agentAttributes) Add(id AgentAttributeID, stringVal string, otherVal interface{}) {
 	if "" != stringVal || otherVal != nil {

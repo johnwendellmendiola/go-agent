@@ -23,7 +23,7 @@ func TestDefaultReplyValidSampler(t *testing.T) {
 
 func TestAdaptiveSampler(t *testing.T) {
 	start := time.Now()
-	sampler := newAdaptiveSampler(adaptiveSamplerInput{
+	sampler := NewAdaptiveSampler(AdaptiveSamplerInput{
 		Period: 60 * time.Second,
 		Target: 2,
 	}, start)
@@ -61,7 +61,7 @@ func TestAdaptiveSampler(t *testing.T) {
 
 func TestAdaptiveSamplerSkipPeriod(t *testing.T) {
 	start := time.Now()
-	sampler := newAdaptiveSampler(adaptiveSamplerInput{
+	sampler := NewAdaptiveSampler(AdaptiveSamplerInput{
 		Period: 60 * time.Second,
 		Target: 2,
 	}, start)
@@ -85,7 +85,7 @@ func TestAdaptiveSamplerTarget(t *testing.T) {
 	var target uint64
 	target = 20
 	start := time.Now()
-	sampler := newAdaptiveSampler(adaptiveSamplerInput{
+	sampler := NewAdaptiveSampler(AdaptiveSamplerInput{
 		Period: 60 * time.Second,
 		Target: target,
 	}, start)

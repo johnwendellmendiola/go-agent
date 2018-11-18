@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// adaptiveSamplerInput holds input fields for the NewAdaptiveSampler function
-type adaptiveSamplerInput struct {
+// AdaptiveSamplerInput holds input fields for the NewAdaptiveSampler function
+type AdaptiveSamplerInput struct {
 	Period time.Duration
 	Target uint64
 }
@@ -32,7 +32,7 @@ func (s SampleNothing) ComputeSampled(priority float32, now time.Time) bool { re
 
 type adaptiveSampler struct {
 	sync.Mutex
-	adaptiveSamplerInput
+	AdaptiveSamplerInput
 
 	// Transactions with priority higher than this are sampled.
 	// This is 1 - sampleRatio.
@@ -45,9 +45,10 @@ type adaptiveSampler struct {
 	}
 }
 
-func newAdaptiveSampler(input adaptiveSamplerInput, now time.Time) *adaptiveSampler {
+// NewAdaptiveSampler creates an AdaptiveSampler.
+func NewAdaptiveSampler(input AdaptiveSamplerInput, now time.Time) AdaptiveSampler {
 	as := &adaptiveSampler{}
-	as.adaptiveSamplerInput = input
+	as.AdaptiveSamplerInput = input
 	as.currentPeriod.end = now.Add(input.Period)
 
 	// Sample the first transactions in the first period.

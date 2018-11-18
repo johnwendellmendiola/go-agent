@@ -40,3 +40,11 @@ const (
 	// string parameters are removed.
 	AttributeRequestReferer = "request.headers.referer"
 )
+
+// AWS Lambda specific attributes:
+const (
+	AttributeAWSRequestID            = "aws.requestId"
+	AttributeAWSLambdaARN            = "aws.lambda.arn"
+	AttributeAWSLambdaColdStart      = "aws.lambda.coldStart"
+	AttributeAWSLambdaEventSourceARN = "aws.lambda.eventSource.arn"
+)
