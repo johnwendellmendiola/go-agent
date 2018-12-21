@@ -169,6 +169,12 @@ func TestServerlessJSON(t *testing.T) {
 	if p.Metadata.ProtocolVersion != internal.ProcotolVersion {
 		t.Error(p.Metadata.ProtocolVersion)
 	}
+	if p.Metadata.AgentLanguage != "go" {
+		t.Error(p.Metadata.AgentLanguage)
+	}
+	if p.Metadata.MetadataVersion != 2 {
+		t.Error(p.Metadata.MetadataVersion)
+	}
 }
 
 func TestServerlessJSONMissingARN(t *testing.T) {

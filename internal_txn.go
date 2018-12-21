@@ -405,13 +405,19 @@ func (txn *txn) WriteHeader(code int) {
 	headersJustWritten(txn, code, hdr)
 }
 
+const (
+	lambdaMetadataVersion = 2
+)
+
 // https://source.datanerd.us/agents/agent-specs/blob/master/Lambda.md
 type serverlessPayload struct {
 	Metadata struct {
+		MetadataVersion      int    `json:"metadata_version"`
 		ARN                  string `json:"arn,omitempty"`
 		ProtocolVersion      int    `json:"protocol_version"`
 		ExecutionEnvironment string `json:"execution_environment,omitempty"`
 		AgentVersion         string `json:"agent_version"`
+		AgentLanguage        string `json:"agent_language"`
 	} `json:"metadata"`
 	Data map[string]json.RawMessage `json:"data"`
 }
@@ -445,10 +451,12 @@ func (txn *txn) serverlessPayloadJSON(executionEnv string) ([]byte, error) {
 		harvestPayloads[cmd] = json.RawMessage(data)
 	}
 	var p serverlessPayload
+	p.Metadata.MetadataVersion = lambdaMetadataVersion
 	p.Metadata.ProtocolVersion = internal.ProcotolVersion
 	p.Metadata.AgentVersion = Version
 	p.Metadata.ExecutionEnvironment = executionEnv
 	p.Metadata.ARN = txn.Attrs.Agent.StringVal(internal.AttributeAWSLambdaARN)
+	p.Metadata.AgentLanguage = agentLanguage
 	p.Data = harvestPayloads
 
 	return json.Marshal(p)
@@ -467,7 +475,7 @@ func serverlessJSON(txn *txn, executionEnv string) ([]byte, error) {
 	gz.Close()
 
 	return json.Marshal([]interface{}{
-		1,
+		lambdaMetadataVersion,
 		"NR_LAMBDA_MONITORING",
 		base64.StdEncoding.EncodeToString(b.Bytes()),
 	})
