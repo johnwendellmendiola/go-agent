@@ -5,7 +5,7 @@ package nrlambda
 
 import (
 	"context"
-	"sync/atomic"
+	"sync"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
@@ -22,12 +22,10 @@ func (h *wrappedHandler) Invoke(ctx context.Context, payload []byte) ([]byte, er
 			aa.AddAgentAttribute(internal.AttributeAWSRequestID, lctx.AwsRequestID, nil)
 			aa.AddAgentAttribute(internal.AttributeAWSLambdaARN, lctx.InvokedFunctionArn, nil)
 		}
-		// Although we are told that each Lambda will only handle one
-		// request at a time, firstTransaction is accessed using an
-		// atomic for defensiveness in case of future changes.
-		if old := atomic.SwapInt32(&h.firstTransaction, 1); old == 0 {
+
+		h.firstTransaction.Do(func() {
 			aa.AddAgentAttribute(internal.AttributeAWSLambdaColdStart, "", true)
-		}
+		})
 	}
 
 	ctx = newrelic.NewContext(ctx, txn)
@@ -47,9 +45,10 @@ type wrappedHandler struct {
 	// functionName is copied from lambdacontext.FunctionName for
 	// deterministic tests that don't depend on environment variables.
 	functionName string
-	// firstTransaction is 0 if there was no earlier transaction, 1
-	// otherwise.
-	firstTransaction int32
+	// Although we are told that each Lambda will only handle one request at
+	// a time, we use a synchronization primitive to determine if this is
+	// the first transaction for defensiveness in case of future changes.
+	firstTransaction sync.Once
 }
 
 // WrapHandler wraps the provided handler and returns a new handler with

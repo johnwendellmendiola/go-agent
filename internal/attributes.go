@@ -247,6 +247,8 @@ type agentAttributeValue struct {
 
 type agentAttributes map[AgentAttributeID]agentAttributeValue
 
+// StringVal is used to access agent attributes with string values.  This
+// function exists to avoid exposing agent attribute storage internals.
 func (attr agentAttributes) StringVal(id AgentAttributeID) string {
 	if v, ok := attr[id]; ok {
 		return v.stringVal

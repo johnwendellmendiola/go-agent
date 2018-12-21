@@ -911,7 +911,7 @@ func (txn *txn) CreateDistributedTracePayload() (payload DistributedTracePayload
 
 	if "" == txn.Reply.AccountID || "" == txn.Reply.TrustedAccountKey {
 		// We can't create a payload:  The application is not yet
-		// connected or serverless distributed tracing configuration has
+		// connected or serverless distributed tracing configuration was
 		// not provided.
 		return
 	}
@@ -991,7 +991,7 @@ func (txn *txn) acceptDistributedTracePayloadLocked(t TransportType, p interface
 
 	if "" == txn.Reply.AccountID || "" == txn.Reply.TrustedAccountKey {
 		// We can't accept a payload:  The application is not yet
-		// connected or serverless distributed tracing configuration has
+		// connected or serverless distributed tracing configuration was
 		// not provided.
 		return nil
 	}
