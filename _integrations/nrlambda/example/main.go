@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -8,7 +9,13 @@ import (
 	"github.com/newrelic/go-agent/_integrations/nrlambda"
 )
 
-func handler() {
+func handler(ctx context.Context) {
+	// The nrlambda handler instrumentation will add the transaction to  the
+	// context.  Access it using newrelic.FromContext to add additional
+	// instrumentation.
+	if txn := newrelic.FromContext(ctx); nil != txn {
+		txn.AddAttribute("userLevel", "gold")
+	}
 	fmt.Println("hello world")
 }
 
