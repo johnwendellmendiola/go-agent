@@ -14,7 +14,7 @@ func TestServerlessDistributedTracingConfigPresent(t *testing.T) {
 		cfg.DistributedTracer.Enabled = true
 		cfg.CrossApplicationTracer.Enabled = false
 		cfg.ServerlessMode.AccountID = "123"
-		cfg.ServerlessMode.TrustKey = "trustkey"
+		cfg.ServerlessMode.TrustedAccountKey = "trustkey"
 		cfg.ServerlessMode.PrimaryAppID = "456"
 	}
 	app := testApp(nil, cfgFn, t)
@@ -41,7 +41,7 @@ func TestServerlessDistributedTracingConfigPartiallyPresent(t *testing.T) {
 		cfg.DistributedTracer.Enabled = true
 		cfg.CrossApplicationTracer.Enabled = false
 		cfg.ServerlessMode.AccountID = "123"
-		cfg.ServerlessMode.TrustKey = "trustkey"
+		cfg.ServerlessMode.TrustedAccountKey = "trustkey"
 	}
 	app := testApp(nil, cfgFn, t)
 	payload := app.StartTransaction("hello", nil, nil).CreateDistributedTracePayload()

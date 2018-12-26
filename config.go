@@ -204,11 +204,11 @@ type Config struct {
 	// ServerlessMode contains fields which control behavior when running in
 	// AWS Lambda.
 	ServerlessMode struct {
-		Enabled        bool
-		ApdexThreshold time.Duration
-		AccountID      string
-		TrustKey       string
-		PrimaryAppID   string
+		Enabled           bool
+		ApdexThreshold    time.Duration
+		AccountID         string
+		TrustedAccountKey string
+		PrimaryAppID      string
 	}
 }
 

@@ -98,7 +98,7 @@ func TestCopyConfigReferenceFieldsPresent(t *testing.T) {
 				"ApdexThreshold":500000000,
 				"Enabled":false,
 				"PrimaryAppID":"",
-				"TrustKey":""
+				"TrustedAccountKey":""
 			},
 			"SpanEvents":{"Enabled":true},
 			"TransactionEvents":{
@@ -232,7 +232,7 @@ func TestCopyConfigReferenceFieldsAbsent(t *testing.T) {
 				"ApdexThreshold":500000000,
 				"Enabled":false,
 				"PrimaryAppID":"",
-				"TrustKey":""
+				"TrustedAccountKey":""
 			},
 			"SpanEvents":{"Enabled":true},
 			"TransactionEvents":{

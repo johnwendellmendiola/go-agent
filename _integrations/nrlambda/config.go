@@ -15,7 +15,7 @@ func NewConfig() newrelic.Config {
 	cfg.ServerlessMode.Enabled = true
 
 	cfg.ServerlessMode.AccountID = os.Getenv("NEW_RELIC_ACCOUNT_ID")
-	cfg.ServerlessMode.TrustKey = os.Getenv("NEW_RELIC_TRUST_KEY")
+	cfg.ServerlessMode.TrustedAccountKey = os.Getenv("NEW_RELIC_TRUST_KEY")
 	cfg.ServerlessMode.PrimaryAppID = os.Getenv("NEW_RELIC_PRIMARY_APPLICATION_ID")
 
 	if s := os.Getenv("NEW_RELIC_APDEX_T"); "" != s {

@@ -108,7 +108,7 @@ func newServerlessConnectReply(config Config) *internal.ConnectReply {
 	reply.ApdexThresholdSeconds = config.ServerlessMode.ApdexThreshold.Seconds()
 
 	reply.AccountID = config.ServerlessMode.AccountID
-	reply.TrustedAccountKey = config.ServerlessMode.TrustKey
+	reply.TrustedAccountKey = config.ServerlessMode.TrustedAccountKey
 	reply.PrimaryAppID = config.ServerlessMode.PrimaryAppID
 
 	if "" == reply.PrimaryAppID {
