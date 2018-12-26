@@ -447,7 +447,13 @@ func (txn *txn) serverlessPayloadJSON(executionEnv string) ([]byte, error) {
 		// transaction event per serverless transaction, that's not an
 		// issue.  Likewise, if we ever split normal transaction events
 		// apart from synthetics events, the transaction will either be
-		// normal or synthetic, so that won't be an issue.
+		// normal or synthetic, so that won't be an issue.  Log an error
+		// if this happens for future defensiveness.
+		if _, ok := harvestPayloads[cmd]; ok {
+			txn.Config.Logger.Error("data with duplicate command name lost", map[string]interface{}{
+				"command": cmd,
+			})
+		}
 		harvestPayloads[cmd] = json.RawMessage(data)
 	}
 	var p serverlessPayload

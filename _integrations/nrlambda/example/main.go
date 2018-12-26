@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	newrelic "github.com/newrelic/go-agent"
 	"github.com/newrelic/go-agent/_integrations/nrlambda"
@@ -18,6 +19,7 @@ func main() {
 	cfg := nrlambda.NewConfig()
 	// Here is the opportunity to change configuration settings before the
 	// application is created.
+	cfg.Logger = newrelic.NewDebugLogger(os.Stdout)
 	app, err := newrelic.NewApplication(cfg)
 	if nil != err {
 		fmt.Println("error creating app (invalid config):", err)
