@@ -409,20 +409,25 @@ const (
 	lambdaMetadataVersion = 2
 )
 
-// https://source.datanerd.us/agents/agent-specs/blob/master/Lambda.md
-type serverlessPayload struct {
-	Metadata struct {
+func serverlessMetadataJSON(arn, executionEnv string) ([]byte, error) {
+	return json.Marshal(struct {
 		MetadataVersion      int    `json:"metadata_version"`
 		ARN                  string `json:"arn,omitempty"`
 		ProtocolVersion      int    `json:"protocol_version"`
 		ExecutionEnvironment string `json:"execution_environment,omitempty"`
 		AgentVersion         string `json:"agent_version"`
 		AgentLanguage        string `json:"agent_language"`
-	} `json:"metadata"`
-	Data map[string]json.RawMessage `json:"data"`
+	}{
+		MetadataVersion:      lambdaMetadataVersion,
+		ProtocolVersion:      internal.ProcotolVersion,
+		AgentVersion:         Version,
+		ExecutionEnvironment: executionEnv,
+		ARN:                  arn,
+		AgentLanguage:        agentLanguage,
+	})
 }
 
-func (txn *txn) serverlessPayloadJSON(executionEnv string) ([]byte, error) {
+func (txn *txn) serverlessDataJSON() ([]byte, error) {
 	harvest := internal.NewHarvest(txn.Start)
 	txn.MergeIntoHarvest(harvest)
 	payloads := harvest.Payloads(false)
@@ -456,34 +461,39 @@ func (txn *txn) serverlessPayloadJSON(executionEnv string) ([]byte, error) {
 		}
 		harvestPayloads[cmd] = json.RawMessage(data)
 	}
-	var p serverlessPayload
-	p.Metadata.MetadataVersion = lambdaMetadataVersion
-	p.Metadata.ProtocolVersion = internal.ProcotolVersion
-	p.Metadata.AgentVersion = Version
-	p.Metadata.ExecutionEnvironment = executionEnv
-	p.Metadata.ARN = txn.Attrs.Agent.StringVal(internal.AttributeAWSLambdaARN)
-	p.Metadata.AgentLanguage = agentLanguage
-	p.Data = harvestPayloads
 
-	return json.Marshal(p)
+	return json.Marshal(harvestPayloads)
 }
 
-func serverlessJSON(txn *txn, executionEnv string) ([]byte, error) {
-	innards, err := txn.serverlessPayloadJSON(executionEnv)
+func (txn *txn) serverlessJSON(executionEnv string) ([]byte, error) {
+	data, err := txn.serverlessDataJSON()
 	if nil != err {
 		return nil, err
 	}
 
-	var b bytes.Buffer
-	gz := gzip.NewWriter(&b)
-	gz.Write(innards)
+	var dataBuf bytes.Buffer
+	gz := gzip.NewWriter(&dataBuf)
+	gz.Write(data)
+	gz.Flush()
+	gz.Close()
+
+	arn := txn.Attrs.Agent.StringVal(internal.AttributeAWSLambdaARN)
+	metadata, err := serverlessMetadataJSON(arn, executionEnv)
+	if nil != err {
+		return nil, err
+	}
+
+	var metadataBuf bytes.Buffer
+	gz = gzip.NewWriter(&metadataBuf)
+	gz.Write(metadata)
 	gz.Flush()
 	gz.Close()
 
 	return json.Marshal([]interface{}{
 		lambdaMetadataVersion,
 		"NR_LAMBDA_MONITORING",
-		base64.StdEncoding.EncodeToString(b.Bytes()),
+		base64.StdEncoding.EncodeToString(metadataBuf.Bytes()),
+		base64.StdEncoding.EncodeToString(dataBuf.Bytes()),
 	})
 }
 
@@ -493,13 +503,13 @@ var (
 
 type serverlessTransaction interface {
 	// serverlessPayloadJSON is used for testing.
-	serverlessPayloadJSON(executionEnv string) ([]byte, error)
+	serverlessJSON(executionEnv string) ([]byte, error)
 	// serverlessDump writes the JSON to stdout.
 	serverlessDump()
 }
 
 func (txn *txn) serverlessDump() {
-	js, err := serverlessJSON(txn, os.Getenv("AWS_EXECUTION_ENV"))
+	js, err := txn.serverlessJSON(os.Getenv("AWS_EXECUTION_ENV"))
 	if err != nil {
 		txn.Config.Logger.Error("error creating serverless json", map[string]interface{}{
 			"error": err.Error(),

@@ -1,7 +1,11 @@
 package newrelic
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
+	"io"
 	"testing"
 	"time"
 
@@ -135,6 +139,24 @@ func TestServerlessRecordCustomEvent(t *testing.T) {
 	}
 }
 
+func decodeUncompress(input string) ([]byte, error) {
+	decoded, err := base64.StdEncoding.DecodeString(input)
+	if nil != err {
+		return nil, err
+	}
+
+	buf := bytes.NewBuffer(decoded)
+	gz, err := gzip.NewReader(buf)
+	if nil != err {
+		return nil, err
+	}
+	var out bytes.Buffer
+	io.Copy(&out, gz)
+	gz.Close()
+
+	return out.Bytes(), nil
+}
+
 func TestServerlessJSON(t *testing.T) {
 	cfgFn := func(cfg *Config) {
 		cfg.ServerlessMode.Enabled = true
@@ -143,53 +165,87 @@ func TestServerlessJSON(t *testing.T) {
 	txn := app.StartTransaction("hello", nil, nil)
 	txn.(internal.AddAgentAttributer).AddAgentAttribute(internal.AttributeAWSLambdaARN, "thearn", nil)
 	txn.End()
-	js, err := txn.(serverlessTransaction).serverlessPayloadJSON("executionEnv")
+	payloadJSON, err := txn.(serverlessTransaction).serverlessJSON("executionEnv")
 	if nil != err {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	var p serverlessPayload
-	err = json.Unmarshal(js, &p)
+	var payload []interface{}
+	err = json.Unmarshal(payloadJSON, &payload)
 	if nil != err {
-		t.Error(err)
+		t.Fatal(err)
+	}
+	if len(payload) != 4 {
+		t.Fatal(payload)
+	}
+	if v := payload[0].(float64); v != lambdaMetadataVersion {
+		t.Fatal(payload[0], lambdaMetadataVersion)
+	}
+	if v := payload[1].(string); v != "NR_LAMBDA_MONITORING" {
+		t.Fatal(payload[1])
+	}
+	metadataJSON, err := decodeUncompress(payload[2].(string))
+	if nil != err {
+		t.Fatal(err)
+	}
+	dataJSON, err := decodeUncompress(payload[3].(string))
+	if nil != err {
+		t.Fatal(err)
+	}
+	var data map[string]interface{}
+	err = json.Unmarshal(dataJSON, &data)
+	if nil != err {
+		t.Fatal(err)
 	}
 	// Data should contain txn event and metrics.  Timestamps make exact
 	// JSON comparison tough.
-	if len(p.Data) != 2 {
-		t.Error(p.Data)
+	if _, ok := data["metric_data"]; !ok {
+		t.Fatal(data)
 	}
-	if p.Metadata.ARN != "thearn" {
-		t.Error(p.Metadata.ARN)
+	if _, ok := data["analytic_event_data"]; !ok {
+		t.Fatal(data)
 	}
-	if p.Metadata.AgentVersion != Version {
-		t.Error(p.Metadata.AgentVersion)
+
+	var metadata map[string]interface{}
+	err = json.Unmarshal(metadataJSON, &metadata)
+	if nil != err {
+		t.Fatal(err)
 	}
-	if p.Metadata.ExecutionEnvironment != "executionEnv" {
-		t.Error(p.Metadata.ExecutionEnvironment)
+	if v, ok := metadata["metadata_version"].(float64); !ok || v != float64(lambdaMetadataVersion) {
+		t.Fatal(metadata["metadata_version"])
 	}
-	if p.Metadata.ProtocolVersion != internal.ProcotolVersion {
-		t.Error(p.Metadata.ProtocolVersion)
+	if v, ok := metadata["arn"].(string); !ok || v != "thearn" {
+		t.Fatal(metadata["arn"])
 	}
-	if p.Metadata.AgentLanguage != "go" {
-		t.Error(p.Metadata.AgentLanguage)
+	if v, ok := metadata["protocol_version"].(float64); !ok || v != float64(internal.ProcotolVersion) {
+		t.Fatal(metadata["protocol_version"])
 	}
-	if p.Metadata.MetadataVersion != 2 {
-		t.Error(p.Metadata.MetadataVersion)
+	if v, ok := metadata["execution_environment"].(string); !ok || v != "executionEnv" {
+		t.Fatal(metadata["execution_environment"])
+	}
+	if v, ok := metadata["agent_version"].(string); !ok || v != Version {
+		t.Fatal(metadata["agent_version"])
+	}
+	if v, ok := metadata["agent_language"].(string); !ok || v != agentLanguage {
+		t.Fatal(metadata["agent_language"])
 	}
 }
 
 func TestServerlessJSONMissingARN(t *testing.T) {
 	// serverlessPayloadJSON should not panic if the Lambda ARN is missing.
+	// The Lambda ARN is not expected to be missing, but to be safe we need
+	// to ensure that txn.Attrs.Agent.StringVal won't panic if its not
+	// there.
 	cfgFn := func(cfg *Config) {
 		cfg.ServerlessMode.Enabled = true
 	}
 	app := testApp(nil, cfgFn, t)
 	txn := app.StartTransaction("hello", nil, nil)
 	txn.End()
-	js, err := txn.(serverlessTransaction).serverlessPayloadJSON("executionEnv")
+	payloadJSON, err := txn.(serverlessTransaction).serverlessJSON("executionEnv")
 	if nil != err {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	if nil == js {
+	if nil == payloadJSON {
 		t.Error("missing JSON")
 	}
 }
