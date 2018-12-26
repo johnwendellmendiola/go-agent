@@ -96,12 +96,10 @@ const (
 	serverlessDefaultPrimaryAppID = "Unknown"
 )
 
-var (
+const (
 	// https://source.datanerd.us/agents/agent-specs/blob/master/Lambda.md#adaptive-sampling
-	serverlessSamplingConfig = internal.AdaptiveSamplerInput{
-		Period: 60 * time.Second,
-		Target: 10,
-	}
+	serverlessSamplerPeriod = 60 * time.Second
+	serverlessSamplerTarget = 10
 )
 
 func newServerlessConnectReply(config Config) *internal.ConnectReply {
@@ -117,7 +115,8 @@ func newServerlessConnectReply(config Config) *internal.ConnectReply {
 		reply.PrimaryAppID = serverlessDefaultPrimaryAppID
 	}
 
-	reply.AdaptiveSampler = internal.NewAdaptiveSampler(serverlessSamplingConfig, time.Now())
+	reply.AdaptiveSampler = internal.NewAdaptiveSampler(serverlessSamplerPeriod,
+		serverlessSamplerTarget, time.Now())
 
 	return reply
 }

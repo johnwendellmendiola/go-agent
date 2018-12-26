@@ -6,12 +6,6 @@ import (
 	"time"
 )
 
-// AdaptiveSamplerInput holds input fields for the NewAdaptiveSampler function
-type AdaptiveSamplerInput struct {
-	Period time.Duration
-	Target uint64
-}
-
 // AdaptiveSampler calculates which transactions should be sampled.  An interface
 // is used in the connect reply to facilitate testing.
 type AdaptiveSampler interface {
@@ -32,7 +26,8 @@ func (s SampleNothing) ComputeSampled(priority float32, now time.Time) bool { re
 
 type adaptiveSampler struct {
 	sync.Mutex
-	AdaptiveSamplerInput
+	period time.Duration
+	target uint64
 
 	// Transactions with priority higher than this are sampled.
 	// This is 1 - sampleRatio.
@@ -46,10 +41,11 @@ type adaptiveSampler struct {
 }
 
 // NewAdaptiveSampler creates an AdaptiveSampler.
-func NewAdaptiveSampler(input AdaptiveSamplerInput, now time.Time) AdaptiveSampler {
+func NewAdaptiveSampler(period time.Duration, target uint64, now time.Time) AdaptiveSampler {
 	as := &adaptiveSampler{}
-	as.AdaptiveSamplerInput = input
-	as.currentPeriod.end = now.Add(input.Period)
+	as.period = period
+	as.target = target
+	as.currentPeriod.end = now.Add(period)
 
 	// Sample the first transactions in the first period.
 	as.priorityMin = 0.0
@@ -69,20 +65,20 @@ func (as *adaptiveSampler) ComputeSampled(priority float32, now time.Time) bool 
 	for now.After(as.currentPeriod.end) {
 		as.priorityMin = 0.0
 		if as.currentPeriod.numSeen > 0 {
-			sampledRatio := float32(as.Target) / float32(as.currentPeriod.numSeen)
+			sampledRatio := float32(as.target) / float32(as.currentPeriod.numSeen)
 			as.priorityMin = 1.0 - sampledRatio
 		}
 		as.currentPeriod.numSampled = 0
 		as.currentPeriod.numSeen = 0
-		as.currentPeriod.end = as.currentPeriod.end.Add(as.Period)
+		as.currentPeriod.end = as.currentPeriod.end.Add(as.period)
 	}
 
 	as.currentPeriod.numSeen++
 
 	// exponential backoff -- if the number of sampled items is greater than our
 	// target, we need to apply the exponential backoff
-	if as.currentPeriod.numSampled > as.Target {
-		if as.computeSampledBackoff(as.Target, as.currentPeriod.numSeen, as.currentPeriod.numSampled) {
+	if as.currentPeriod.numSampled > as.target {
+		if as.computeSampledBackoff(as.target, as.currentPeriod.numSeen, as.currentPeriod.numSampled) {
 			as.currentPeriod.numSampled++
 			return true
 		}
