@@ -21,8 +21,8 @@ func requestEvent(ctx context.Context, event interface{}) {
 		return
 	}
 
-	if _, ok := event.(events.APIGatewayProxyRequest); ok {
-		txn.SetWebRequest(nil)
+	if request, ok := event.(events.APIGatewayProxyRequest); ok {
+		txn.SetWebRequest(proxyRequest{request: request})
 	}
 }
 

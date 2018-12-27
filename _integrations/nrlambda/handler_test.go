@@ -2,6 +2,7 @@ package nrlambda
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -10,10 +11,15 @@ import (
 	"github.com/newrelic/go-agent/internal"
 )
 
-func testApp(t *testing.T) newrelic.Application {
+func testApp(cfgfn func(*newrelic.Config), t *testing.T) newrelic.Application {
 	cfg := newrelic.NewConfig("", "")
 	cfg.Enabled = false
 	cfg.ServerlessMode.Enabled = true
+
+	if nil != cfgfn {
+		cfgfn(&cfg)
+	}
+
 	app, err := newrelic.NewApplication(cfg)
 	if nil != err {
 		t.Fatal(err)
@@ -24,7 +30,7 @@ func testApp(t *testing.T) newrelic.Application {
 
 func TestColdStart(t *testing.T) {
 	originalHandler := func(c context.Context) {}
-	app := testApp(t)
+	app := testApp(nil, t)
 	wrapped := Wrap(originalHandler, app)
 	w := wrapped.(*wrappedHandler)
 	w.functionName = "functionName"
@@ -58,7 +64,7 @@ func TestColdStart(t *testing.T) {
 func TestErrorCapture(t *testing.T) {
 	returnError := errors.New("problem")
 	originalHandler := func() error { return returnError }
-	app := testApp(t)
+	app := testApp(nil, t)
 	wrapped := Wrap(originalHandler, app)
 	w := wrapped.(*wrappedHandler)
 	w.functionName = "functionName"
@@ -98,12 +104,23 @@ func TestWrapNilApp(t *testing.T) {
 
 func TestSetWebRequest(t *testing.T) {
 	originalHandler := func(events.APIGatewayProxyRequest) {}
-	app := testApp(t)
+	app := testApp(nil, t)
 	wrapped := Wrap(originalHandler, app)
 	w := wrapped.(*wrappedHandler)
 	w.functionName = "functionName"
 
-	resp, err := wrapped.Invoke(context.Background(), []byte(`{}`))
+	req := events.APIGatewayProxyRequest{
+		Headers: map[string]string{
+			"X-Forwarded-Port":  "4000",
+			"X-Forwarded-Proto": "HTTPS",
+		},
+	}
+	reqbytes, err := json.Marshal(req)
+	if err != nil {
+		t.Error("unable to marshal json", err)
+	}
+
+	resp, err := wrapped.Invoke(context.Background(), reqbytes)
 	if err != nil {
 		t.Error(err, string(resp))
 	}
