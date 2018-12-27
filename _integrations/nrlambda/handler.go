@@ -70,7 +70,7 @@ func WrapHandler(handler lambda.Handler, app newrelic.Application) lambda.Handle
 // instrumentation. Start should generally be used in place of Wrap: this
 // function is exposed for consumers who are chaining middlewares.
 func Wrap(handler interface{}, app newrelic.Application) lambda.Handler {
-	return WrapHandler(lambda.NewHandler(handler), app)
+	return WrapHandler(NewHandler(handler), app)
 }
 
 // Start should be used in place of lambda.Start.
