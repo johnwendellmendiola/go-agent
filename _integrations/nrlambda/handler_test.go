@@ -37,10 +37,6 @@ func distributedTracingEnabled(config *newrelic.Config) {
 	config.ServerlessMode.PrimaryAppID = "1"
 }
 
-func attributesIncludeResponse(config *newrelic.Config) {
-	config.Attributes.Include = []string{"response.*"}
-}
-
 func TestColdStart(t *testing.T) {
 	originalHandler := func(c context.Context) {}
 	app := testApp(nil, t)
@@ -268,7 +264,7 @@ func TestAPIGatewayProxyResponse(t *testing.T) {
 		}, nil
 	}
 
-	app := testApp(attributesIncludeResponse, t)
+	app := testApp(nil, t)
 	wrapped := Wrap(originalHandler, app)
 	w := wrapped.(*wrappedHandler)
 	w.functionName = "functionName"
