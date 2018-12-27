@@ -249,3 +249,22 @@ func TestServerlessJSONMissingARN(t *testing.T) {
 		t.Error("missing JSON")
 	}
 }
+
+func BenchmarkServerlessJSON(b *testing.B) {
+	cfgFn := func(cfg *Config) {
+		cfg.ServerlessMode.Enabled = true
+	}
+	app := testApp(nil, cfgFn, b)
+	txn := app.StartTransaction("hello", nil, nil)
+	txn.(internal.AddAgentAttributer).AddAgentAttribute(internal.AttributeAWSLambdaARN, "thearn", nil)
+	segment := StartSegment(txn, "mySegment")
+	segment.End()
+	txn.End()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		txn.(serverlessTransaction).serverlessJSON("executionEnv")
+	}
+}
