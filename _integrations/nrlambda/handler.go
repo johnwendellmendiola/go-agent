@@ -7,6 +7,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	newrelic "github.com/newrelic/go-agent"
@@ -14,7 +15,15 @@ import (
 )
 
 func requestEvent(ctx context.Context, event interface{}) {
-	// TODO: handle the request event here
+	txn := newrelic.FromContext(ctx)
+
+	if nil == txn {
+		return
+	}
+
+	if _, ok := event.(events.APIGatewayProxyRequest); ok {
+		txn.SetWebRequest(nil)
+	}
 }
 
 func responseEvent(ctx context.Context, event interface{}) {

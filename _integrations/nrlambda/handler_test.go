@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/aws/aws-lambda-go/events"
 	newrelic "github.com/newrelic/go-agent"
 	"github.com/newrelic/go-agent/internal"
 )
@@ -93,4 +94,34 @@ func TestWrapNilApp(t *testing.T) {
 	if nil != err || string(resp) != "123" {
 		t.Error("unexpected response", err, string(resp))
 	}
+}
+
+func TestSetWebRequest(t *testing.T) {
+	originalHandler := func(events.APIGatewayProxyRequest) {}
+	app := testApp(t)
+	wrapped := Wrap(originalHandler, app)
+	w := wrapped.(*wrappedHandler)
+	w.functionName = "functionName"
+
+	resp, err := wrapped.Invoke(context.Background(), []byte(`{}`))
+	if err != nil {
+		t.Error(err, string(resp))
+	}
+	app.(internal.Expect).ExpectMetrics(t, []internal.WantMetric{
+		{Name: "Apdex", Scope: "", Forced: true, Data: nil},
+		{Name: "Apdex/Go/functionName", Scope: "", Forced: false, Data: nil},
+		{Name: "HttpDispatcher", Scope: "", Forced: true, Data: nil},
+		{Name: "WebTransaction", Scope: "", Forced: true, Data: nil},
+		{Name: "WebTransaction/Go/functionName", Scope: "", Forced: true, Data: nil},
+	})
+	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
+		Intrinsics: map[string]interface{}{
+			"name":             "WebTransaction/Go/functionName",
+			"nr.apdexPerfZone": "S",
+		},
+		UserAttributes: map[string]interface{}{},
+		AgentAttributes: map[string]interface{}{
+			"aws.lambda.coldStart": true,
+		},
+	}})
 }
