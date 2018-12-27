@@ -9,6 +9,38 @@ import (
 	newrelic "github.com/newrelic/go-agent"
 )
 
+func getEventSourceARN(event interface{}) string {
+	switch v := event.(type) {
+	case events.KinesisFirehoseEvent:
+		return v.DeliveryStreamArn
+	case events.KinesisEvent:
+		if len(v.Records) > 0 {
+			return v.Records[0].EventSourceArn
+		}
+	case events.CodeCommitEvent:
+		if len(v.Records) > 0 {
+			return v.Records[0].EventSourceARN
+		}
+	case events.DynamoDBEvent:
+		if len(v.Records) > 0 {
+			return v.Records[0].EventSourceArn
+		}
+	case events.SQSEvent:
+		if len(v.Records) > 0 {
+			return v.Records[0].EventSourceARN
+		}
+	case events.S3Event:
+		if len(v.Records) > 0 {
+			return v.Records[0].S3.Bucket.Arn
+		}
+	case events.SNSEvent:
+		if len(v.Records) > 0 {
+			return v.Records[0].EventSubscriptionArn
+		}
+	}
+	return ""
+}
+
 type proxyRequest struct{ request events.APIGatewayProxyRequest }
 
 var _ newrelic.WebRequest = &proxyRequest{}

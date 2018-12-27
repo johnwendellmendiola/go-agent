@@ -213,3 +213,41 @@ func TestDistributedTracing(t *testing.T) {
 		},
 	}})
 }
+
+func TestEventARN(t *testing.T) {
+	originalHandler := func(events.DynamoDBEvent) {}
+	app := testApp(nil, t)
+	wrapped := Wrap(originalHandler, app)
+	w := wrapped.(*wrappedHandler)
+	w.functionName = "functionName"
+
+	req := events.DynamoDBEvent{
+		Records: []events.DynamoDBEventRecord{{
+			EventSourceArn: "ARN",
+		}},
+	}
+
+	reqbytes, err := json.Marshal(req)
+	if err != nil {
+		t.Error("unable to marshal json", err)
+	}
+
+	resp, err := wrapped.Invoke(context.Background(), reqbytes)
+	if err != nil {
+		t.Error(err, string(resp))
+	}
+	app.(internal.Expect).ExpectMetrics(t, []internal.WantMetric{
+		{Name: "OtherTransaction/all", Scope: "", Forced: true, Data: nil},
+		{Name: "OtherTransaction/Go/functionName", Scope: "", Forced: true, Data: nil},
+	})
+	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
+		Intrinsics: map[string]interface{}{
+			"name": "OtherTransaction/Go/functionName",
+		},
+		UserAttributes: map[string]interface{}{},
+		AgentAttributes: map[string]interface{}{
+			"aws.lambda.coldStart":       true,
+			"aws.lambda.eventSource.arn": "ARN",
+		},
+	}})
+}

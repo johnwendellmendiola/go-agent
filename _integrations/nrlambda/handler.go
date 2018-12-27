@@ -21,6 +21,12 @@ func requestEvent(ctx context.Context, event interface{}) {
 		return
 	}
 
+	if aa, ok := txn.(internal.AddAgentAttributer); ok {
+		if sourceARN := getEventSourceARN(event); "" != sourceARN {
+			aa.AddAgentAttribute(internal.AttributeAWSLambdaEventSourceARN, sourceARN, nil)
+		}
+	}
+
 	if request, ok := event.(events.APIGatewayProxyRequest); ok {
 		txn.SetWebRequest(proxyRequest{request: request})
 	}
