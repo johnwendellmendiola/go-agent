@@ -89,7 +89,7 @@ type handlerTraceKey struct{}
 // WithHandlerTrace adds callbacks to the provided context which allows handlers
 // which wrap the return value of NewHandler to access to the request and
 // response events.
-func WithHandlerTrace(ctx context.Context, trace HandlerTrace) context.Context {
+func withHandlerTrace(ctx context.Context, trace HandlerTrace) context.Context {
 	existing := contextHandlerTrace(ctx)
 	return context.WithValue(ctx, handlerTraceKey{}, HandlerTrace{
 		RequestEvent:  callbackCompose(existing.RequestEvent, trace.RequestEvent),
@@ -107,7 +107,7 @@ func contextHandlerTrace(ctx context.Context) HandlerTrace {
 // delegates to the input handler function.  The handler function parameter must
 // satisfy the rules documented by Start.  If handlerFunc is not a valid
 // handler, the returned Handler simply reports the validation error.
-func NewHandler(handlerFunc interface{}) lambda.Handler {
+func newHandler(handlerFunc interface{}) lambda.Handler {
 	if handlerFunc == nil {
 		return errorHandler(fmt.Errorf("handler is nil"))
 	}
