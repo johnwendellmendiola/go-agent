@@ -13,6 +13,14 @@ import (
 	"github.com/newrelic/go-agent/internal"
 )
 
+func requestEvent(ctx context.Context, event interface{}) {
+	// TODO: handle the request event here
+}
+
+func responseEvent(ctx context.Context, event interface{}) {
+	// TODO: handle the response event here
+}
+
 func (h *wrappedHandler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 	txn := h.app.StartTransaction(h.functionName, nil, nil)
 	defer txn.End()
@@ -29,6 +37,10 @@ func (h *wrappedHandler) Invoke(ctx context.Context, payload []byte) ([]byte, er
 	}
 
 	ctx = newrelic.NewContext(ctx, txn)
+	ctx = WithHandlerTrace(ctx, HandlerTrace{
+		RequestEvent:  requestEvent,
+		ResponseEvent: responseEvent,
+	})
 
 	response, err := h.original.Invoke(ctx, payload)
 
