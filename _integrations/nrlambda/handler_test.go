@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -34,6 +35,10 @@ func distributedTracingEnabled(config *newrelic.Config) {
 	config.ServerlessMode.AccountID = "1"
 	config.ServerlessMode.TrustKey = "1"
 	config.ServerlessMode.PrimaryAppID = "1"
+}
+
+func attributesIncludeResponse(config *newrelic.Config) {
+	config.Attributes.Include = []string{"response.*"}
 }
 
 func TestColdStart(t *testing.T) {
@@ -248,6 +253,43 @@ func TestEventARN(t *testing.T) {
 		AgentAttributes: map[string]interface{}{
 			"aws.lambda.coldStart":       true,
 			"aws.lambda.eventSource.arn": "ARN",
+		},
+	}})
+}
+
+func TestAPIGatewayProxyResponse(t *testing.T) {
+	originalHandler := func() (events.APIGatewayProxyResponse, error) {
+		return events.APIGatewayProxyResponse{
+			Body:       "Hello World",
+			StatusCode: 200,
+			Headers: map[string]string{
+				"Content-Type": "text/html",
+			},
+		}, nil
+	}
+
+	app := testApp(attributesIncludeResponse, t)
+	wrapped := Wrap(originalHandler, app)
+	w := wrapped.(*wrappedHandler)
+	w.functionName = "functionName"
+
+	resp, err := wrapped.Invoke(context.Background(), nil)
+	if nil != err {
+		t.Error("unexpected err", err)
+	}
+	if !strings.Contains(string(resp), "Hello World") {
+		t.Error("unexpected response", string(resp))
+	}
+
+	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
+		Intrinsics: map[string]interface{}{
+			"name": "OtherTransaction/Go/functionName",
+		},
+		UserAttributes: map[string]interface{}{},
+		AgentAttributes: map[string]interface{}{
+			"aws.lambda.coldStart":         true,
+			"httpResponseCode":             "200",
+			"response.headers.contentType": "text/html",
 		},
 	}})
 }

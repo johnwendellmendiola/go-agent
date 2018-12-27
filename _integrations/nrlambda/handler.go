@@ -5,6 +5,7 @@ package nrlambda
 
 import (
 	"context"
+	"net/http"
 	"sync"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -13,6 +14,16 @@ import (
 	newrelic "github.com/newrelic/go-agent"
 	"github.com/newrelic/go-agent/internal"
 )
+
+type responseShim struct{ header http.Header }
+
+var _ http.ResponseWriter = &responseShim{}
+
+func (r *responseShim) Header() http.Header       { return r.header }
+func (r *responseShim) Write([]byte) (int, error) { return 0, nil }
+func (r *responseShim) WriteHeader(int)           {}
+
+type responseShimKey struct{}
 
 func requestEvent(ctx context.Context, event interface{}) {
 	txn := newrelic.FromContext(ctx)
@@ -33,11 +44,30 @@ func requestEvent(ctx context.Context, event interface{}) {
 }
 
 func responseEvent(ctx context.Context, event interface{}) {
-	// TODO: handle the response event here
+	proxyResponse, ok := event.(events.APIGatewayProxyResponse)
+	if !ok {
+		return
+	}
+	txn := newrelic.FromContext(ctx)
+	if nil == txn {
+		return
+	}
+	rw, ok := ctx.Value(responseShimKey{}).(*responseShim)
+	if !ok {
+		return
+	}
+	rw.header = make(http.Header, len(proxyResponse.Headers))
+	for k, v := range proxyResponse.Headers {
+		rw.header.Add(k, v)
+	}
+	if 0 != proxyResponse.StatusCode {
+		txn.WriteHeader(proxyResponse.StatusCode)
+	}
 }
 
 func (h *wrappedHandler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
-	txn := h.app.StartTransaction(h.functionName, nil, nil)
+	rw := &responseShim{}
+	txn := h.app.StartTransaction(h.functionName, rw, nil)
 	defer txn.End()
 
 	if aa, ok := txn.(internal.AddAgentAttributer); ok {
@@ -56,6 +86,7 @@ func (h *wrappedHandler) Invoke(ctx context.Context, payload []byte) ([]byte, er
 		RequestEvent:  requestEvent,
 		ResponseEvent: responseEvent,
 	})
+	ctx = context.WithValue(ctx, responseShimKey{}, rw)
 
 	response, err := h.original.Invoke(ctx, payload)
 
