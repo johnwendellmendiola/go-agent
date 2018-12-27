@@ -43,8 +43,6 @@ func getEventSourceARN(event interface{}) string {
 
 type proxyRequest struct{ request events.APIGatewayProxyRequest }
 
-var _ newrelic.WebRequest = &proxyRequest{}
-
 func (r proxyRequest) Header() http.Header {
 	// In the future there might be a method to do this:
 	// https://github.com/aws/aws-lambda-go/issues/131
