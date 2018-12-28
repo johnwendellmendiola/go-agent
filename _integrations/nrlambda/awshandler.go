@@ -1,5 +1,10 @@
 package nrlambda
 
+// Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+// This file contains code copied from github.com/aws/aws-lambda-go released
+// under the license: https://github.com/aws/aws-lambda-go/blob/master/LICENSE
+
 import (
 	"context"
 	"encoding/json"

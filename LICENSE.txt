@@ -5,6 +5,13 @@ under the following BSD license:
 
 -------------------------------------------------------------------------------
 
+This product includes source derived from 'aws-lambda-go' by Amazon.com, Inc,
+distributed under the following Apache Version 2.0 License:
+
+	https://github.com/aws/aws-lambda-go/blob/master/LICENSE
+
+-------------------------------------------------------------------------------
+
 All other components of this product are Copyright: (c) 2016-2019 New Relic,
 Inc. All rights reserved.
 
