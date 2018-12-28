@@ -33,7 +33,7 @@ func distributedTracingEnabled(config *newrelic.Config) {
 	config.CrossApplicationTracer.Enabled = false
 	config.DistributedTracer.Enabled = true
 	config.ServerlessMode.AccountID = "1"
-	config.ServerlessMode.TrustKey = "1"
+	config.ServerlessMode.TrustedAccountKey = "1"
 	config.ServerlessMode.PrimaryAppID = "1"
 }
 
