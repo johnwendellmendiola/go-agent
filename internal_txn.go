@@ -502,9 +502,11 @@ var (
 )
 
 type serverlessTransaction interface {
-	// serverlessPayloadJSON is used for testing.
+	// serverlessJSON creates the Lambda JSON that will be printed to stdout
+	// by serverlessDump.  It is exposed through this interface to
+	// facilitate testing.
 	serverlessJSON(executionEnv string) ([]byte, error)
-	// serverlessDump writes the JSON to stdout.
+	// serverlessDump writes the Lambda JSON to stdout.
 	serverlessDump()
 }
 
