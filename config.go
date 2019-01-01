@@ -204,8 +204,23 @@ type Config struct {
 	// ServerlessMode contains fields which control behavior when running in
 	// AWS Lambda.
 	ServerlessMode struct {
-		Enabled           bool
-		ApdexThreshold    time.Duration
+		// Enabling ServerlessMode will print each transaction's data to
+		// stdout.  No goroutines will be spawned in serverless mode,
+		// and no data will be sent directly to the New Relic backend.
+		// nrlambda.NewConfig sets Enabled to true.
+		Enabled bool
+		// ApdexThreshold sets the Apdex threshold when in
+		// ServerlessMode.  The default is 500 milliseconds.
+		// nrlambda.NewConfig populates this field using the
+		// NEW_RELIC_APDEX_T environment variable.
+		// https://docs.newrelic.com/docs/apm/new-relic-apm/apdex/apdex-measure-user-satisfaction
+		ApdexThreshold time.Duration
+		// AccountID, TrustedAccountKey, and PrimaryAppID are used for
+		// distributed tracing in ServerlessMode.  AccountID and
+		// TrustedAccountKey must be populated for distributed tracing
+		// to be enabled. nrlambda.NewConfig populates these fields
+		// using the NEW_RELIC_ACCOUNT_ID, NEW_RELIC_TRUST_KEY, and
+		// NEW_RELIC_PRIMARY_APPLICATION_ID environment variables.
 		AccountID         string
 		TrustedAccountKey string
 		PrimaryAppID      string
