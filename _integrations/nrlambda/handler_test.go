@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	newrelic "github.com/newrelic/go-agent"
 	"github.com/newrelic/go-agent/internal"
 )
@@ -45,6 +46,11 @@ func TestColdStart(t *testing.T) {
 	w.functionName = "functionName"
 
 	ctx := context.Background()
+	lctx := &lambdacontext.LambdaContext{
+		AwsRequestID:       "request-id",
+		InvokedFunctionArn: "function-arn",
+	}
+	ctx = lambdacontext.NewContext(ctx, lctx)
 
 	resp, err := wrapped.Invoke(ctx, nil)
 	if nil != err || string(resp) != "null" {
@@ -54,6 +60,8 @@ func TestColdStart(t *testing.T) {
 		Intrinsics:     map[string]interface{}{"name": "OtherTransaction/Go/functionName"},
 		UserAttributes: map[string]interface{}{},
 		AgentAttributes: map[string]interface{}{
+			"aws.requestId":        "request-id",
+			"aws.lambda.arn":       "function-arn",
 			"aws.lambda.coldStart": true,
 		},
 	}})
@@ -64,9 +72,12 @@ func TestColdStart(t *testing.T) {
 		t.Error("unexpected response", err, string(resp))
 	}
 	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
-		Intrinsics:      map[string]interface{}{"name": "OtherTransaction/Go/functionName"},
-		UserAttributes:  map[string]interface{}{},
-		AgentAttributes: map[string]interface{}{},
+		Intrinsics:     map[string]interface{}{"name": "OtherTransaction/Go/functionName"},
+		UserAttributes: map[string]interface{}{},
+		AgentAttributes: map[string]interface{}{
+			"aws.requestId":  "request-id",
+			"aws.lambda.arn": "function-arn",
+		},
 	}})
 }
 
