@@ -64,8 +64,8 @@ func TestServerlessDistributedTracingConfigPartiallyPresent(t *testing.T) {
 }
 
 func TestServerlessDistributedTracingConfigAbsent(t *testing.T) {
-	// Test that payloads do not get created when distributed tracing
-	// configuration is not present.
+	// Test that payloads do not get created or accepted when distributed
+	// tracing configuration is not present.
 	cfgFn := func(cfg *Config) {
 		cfg.ServerlessMode.Enabled = true
 		cfg.DistributedTracer.Enabled = true
@@ -77,6 +77,29 @@ func TestServerlessDistributedTracingConfigAbsent(t *testing.T) {
 	if "" != payload.Text() {
 		t.Error(payload.Text())
 	}
+	nonemptyPayload := func() DistributedTracePayload {
+		app := testApp(nil, func(cfg *Config) {
+			cfgFn(cfg)
+			cfg.ServerlessMode.AccountID = "123"
+			cfg.ServerlessMode.TrustedAccountKey = "trustkey"
+			cfg.ServerlessMode.PrimaryAppID = "456"
+		}, t)
+		return app.StartTransaction("hello", nil, nil).CreateDistributedTracePayload()
+	}()
+	if "" == nonemptyPayload.Text() {
+		t.Error(nonemptyPayload.Text())
+	}
+	err := txn.AcceptDistributedTracePayload(TransportHTTP, nonemptyPayload)
+	if err != nil {
+		t.Error(err)
+	}
+	txn.End()
+	app.ExpectMetrics(t, []internal.WantMetric{
+		{Name: "OtherTransaction/Go/hello", Scope: "", Forced: true, Data: nil},
+		{Name: "OtherTransaction/all", Scope: "", Forced: true, Data: nil},
+		{Name: "DurationByCaller/Unknown/Unknown/Unknown/Unknown/all", Scope: "", Forced: false, Data: nil},
+		{Name: "DurationByCaller/Unknown/Unknown/Unknown/Unknown/allOther", Scope: "", Forced: false, Data: nil},
+	})
 }
 
 func TestServerlessLowApdex(t *testing.T) {
