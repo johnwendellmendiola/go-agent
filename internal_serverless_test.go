@@ -206,10 +206,6 @@ func TestServerlessJSON(t *testing.T) {
 	if v := payload[1].(string); v != "NR_LAMBDA_MONITORING" {
 		t.Fatal(payload[1])
 	}
-	metadataJSON, err := decodeUncompress(payload[2].(string))
-	if nil != err {
-		t.Fatal(err)
-	}
 	dataJSON, err := decodeUncompress(payload[3].(string))
 	if nil != err {
 		t.Fatal(err)
@@ -228,10 +224,9 @@ func TestServerlessJSON(t *testing.T) {
 		t.Fatal(data)
 	}
 
-	var metadata map[string]interface{}
-	err = json.Unmarshal(metadataJSON, &metadata)
-	if nil != err {
-		t.Fatal(err)
+	metadata, ok := payload[2].(map[string]interface{})
+	if !ok {
+		t.Fatal(payload[2])
 	}
 	if v, ok := metadata["metadata_version"].(float64); !ok || v != float64(lambdaMetadataVersion) {
 		t.Fatal(metadata["metadata_version"])

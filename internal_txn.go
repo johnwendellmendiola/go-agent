@@ -409,24 +409,6 @@ const (
 	lambdaMetadataVersion = 2
 )
 
-func serverlessMetadataJSON(arn, executionEnv string) ([]byte, error) {
-	return json.Marshal(struct {
-		MetadataVersion      int    `json:"metadata_version"`
-		ARN                  string `json:"arn,omitempty"`
-		ProtocolVersion      int    `json:"protocol_version"`
-		ExecutionEnvironment string `json:"execution_environment,omitempty"`
-		AgentVersion         string `json:"agent_version"`
-		AgentLanguage        string `json:"agent_language"`
-	}{
-		MetadataVersion:      lambdaMetadataVersion,
-		ProtocolVersion:      internal.ProcotolVersion,
-		AgentVersion:         Version,
-		ExecutionEnvironment: executionEnv,
-		ARN:                  arn,
-		AgentLanguage:        agentLanguage,
-	})
-}
-
 func (txn *txn) serverlessDataJSON() ([]byte, error) {
 	harvest := internal.NewHarvest(txn.Start)
 	txn.MergeIntoHarvest(harvest)
@@ -477,22 +459,24 @@ func (txn *txn) serverlessJSON(executionEnv string) ([]byte, error) {
 	gz.Flush()
 	gz.Close()
 
-	arn := txn.Attrs.Agent.StringVal(internal.AttributeAWSLambdaARN)
-	metadata, err := serverlessMetadataJSON(arn, executionEnv)
-	if nil != err {
-		return nil, err
-	}
-
-	var metadataBuf bytes.Buffer
-	gz = gzip.NewWriter(&metadataBuf)
-	gz.Write(metadata)
-	gz.Flush()
-	gz.Close()
-
 	return json.Marshal([]interface{}{
 		lambdaMetadataVersion,
 		"NR_LAMBDA_MONITORING",
-		base64.StdEncoding.EncodeToString(metadataBuf.Bytes()),
+		struct {
+			MetadataVersion      int    `json:"metadata_version"`
+			ARN                  string `json:"arn,omitempty"`
+			ProtocolVersion      int    `json:"protocol_version"`
+			ExecutionEnvironment string `json:"execution_environment,omitempty"`
+			AgentVersion         string `json:"agent_version"`
+			AgentLanguage        string `json:"agent_language"`
+		}{
+			MetadataVersion:      lambdaMetadataVersion,
+			ProtocolVersion:      internal.ProcotolVersion,
+			AgentVersion:         Version,
+			ExecutionEnvironment: executionEnv,
+			ARN:                  txn.Attrs.Agent.StringVal(internal.AttributeAWSLambdaARN),
+			AgentLanguage:        agentLanguage,
+		},
 		base64.StdEncoding.EncodeToString(dataBuf.Bytes()),
 	})
 }
