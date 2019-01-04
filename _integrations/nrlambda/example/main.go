@@ -20,8 +20,8 @@ func handler(ctx context.Context) {
 
 func main() {
 	// nrlambda.NewConfig should be used in place of newrelic.NewConfig
-	// since it sets Lambda specific configuration settings. It is critical
-	// that cfg.ServerlessMode.Enabled is set to true.
+	// since it sets Lambda specific configuration settings including
+	// Config.ServerlessMode.Enabled.
 	cfg := nrlambda.NewConfig()
 	// Here is the opportunity to change configuration settings before the
 	// application is created.

@@ -13,14 +13,12 @@ import (
 	"github.com/newrelic/go-agent/internal"
 )
 
-func testApp(cfgfn func(*newrelic.Config), t *testing.T) newrelic.Application {
-	cfg := newrelic.NewConfig("", "")
-	cfg.Enabled = false
-	cfg.ServerlessMode.Enabled = true
-
-	if nil != cfgfn {
-		cfgfn(&cfg)
+func testApp(getenv func(string) string, t *testing.T) newrelic.Application {
+	if nil == getenv {
+		getenv = func(string) string { return "" }
 	}
+	cfg := newConfigInternal(getenv)
+	cfg.Enabled = false
 
 	app, err := newrelic.NewApplication(cfg)
 	if nil != err {
@@ -30,12 +28,17 @@ func testApp(cfgfn func(*newrelic.Config), t *testing.T) newrelic.Application {
 	return app
 }
 
-func distributedTracingEnabled(config *newrelic.Config) {
-	config.CrossApplicationTracer.Enabled = false
-	config.DistributedTracer.Enabled = true
-	config.ServerlessMode.AccountID = "1"
-	config.ServerlessMode.TrustedAccountKey = "1"
-	config.ServerlessMode.PrimaryAppID = "1"
+func distributedTracingEnabled(key string) string {
+	switch key {
+	case "NEW_RELIC_ACCOUNT_ID":
+		return "1"
+	case "NEW_RELIC_TRUST_KEY":
+		return "1"
+	case "NEW_RELIC_PRIMARY_APPLICATION_ID":
+		return "1"
+	default:
+		return ""
+	}
 }
 
 func TestColdStart(t *testing.T) {
@@ -57,7 +60,13 @@ func TestColdStart(t *testing.T) {
 		t.Error("unexpected response", err, string(resp))
 	}
 	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
-		Intrinsics:     map[string]interface{}{"name": "OtherTransaction/Go/functionName"},
+		Intrinsics: map[string]interface{}{
+			"name":     "OtherTransaction/Go/functionName",
+			"guid":     internal.MatchAnything,
+			"priority": internal.MatchAnything,
+			"sampled":  internal.MatchAnything,
+			"traceId":  internal.MatchAnything,
+		},
 		UserAttributes: map[string]interface{}{},
 		AgentAttributes: map[string]interface{}{
 			"aws.requestId":        "request-id",
@@ -72,7 +81,13 @@ func TestColdStart(t *testing.T) {
 		t.Error("unexpected response", err, string(resp))
 	}
 	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
-		Intrinsics:     map[string]interface{}{"name": "OtherTransaction/Go/functionName"},
+		Intrinsics: map[string]interface{}{
+			"name":     "OtherTransaction/Go/functionName",
+			"guid":     internal.MatchAnything,
+			"priority": internal.MatchAnything,
+			"sampled":  internal.MatchAnything,
+			"traceId":  internal.MatchAnything,
+		},
 		UserAttributes: map[string]interface{}{},
 		AgentAttributes: map[string]interface{}{
 			"aws.requestId":  "request-id",
@@ -100,9 +115,19 @@ func TestErrorCapture(t *testing.T) {
 		{Name: "Errors/all", Scope: "", Forced: true, Data: []float64{1, 0, 0, 0, 0, 0}},
 		{Name: "Errors/allOther", Scope: "", Forced: true, Data: []float64{1, 0, 0, 0, 0, 0}},
 		{Name: "Errors/OtherTransaction/Go/functionName", Scope: "", Forced: true, Data: []float64{1, 0, 0, 0, 0, 0}},
+		{Name: "ErrorsByCaller/Unknown/Unknown/Unknown/Unknown/all", Scope: "", Forced: false, Data: nil},
+		{Name: "DurationByCaller/Unknown/Unknown/Unknown/Unknown/all", Scope: "", Forced: false, Data: nil},
+		{Name: "DurationByCaller/Unknown/Unknown/Unknown/Unknown/allOther", Scope: "", Forced: false, Data: nil},
+		{Name: "ErrorsByCaller/Unknown/Unknown/Unknown/Unknown/allOther", Scope: "", Forced: false, Data: nil},
 	})
 	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
-		Intrinsics:     map[string]interface{}{"name": "OtherTransaction/Go/functionName"},
+		Intrinsics: map[string]interface{}{
+			"name":     "OtherTransaction/Go/functionName",
+			"guid":     internal.MatchAnything,
+			"priority": internal.MatchAnything,
+			"sampled":  internal.MatchAnything,
+			"traceId":  internal.MatchAnything,
+		},
 		UserAttributes: map[string]interface{}{},
 		AgentAttributes: map[string]interface{}{
 			"aws.lambda.coldStart": true,
@@ -150,11 +175,17 @@ func TestSetWebRequest(t *testing.T) {
 		{Name: "HttpDispatcher", Scope: "", Forced: true, Data: nil},
 		{Name: "WebTransaction", Scope: "", Forced: true, Data: nil},
 		{Name: "WebTransaction/Go/functionName", Scope: "", Forced: true, Data: nil},
+		{Name: "DurationByCaller/Unknown/Unknown/Unknown/Unknown/all", Scope: "", Forced: false, Data: nil},
+		{Name: "DurationByCaller/Unknown/Unknown/Unknown/Unknown/allWeb", Scope: "", Forced: false, Data: nil},
 	})
 	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
 		Intrinsics: map[string]interface{}{
 			"name":             "WebTransaction/Go/functionName",
 			"nr.apdexPerfZone": "S",
+			"guid":             internal.MatchAnything,
+			"priority":         internal.MatchAnything,
+			"sampled":          internal.MatchAnything,
+			"traceId":          internal.MatchAnything,
 		},
 		UserAttributes: map[string]interface{}{},
 		AgentAttributes: map[string]interface{}{
@@ -251,10 +282,16 @@ func TestEventARN(t *testing.T) {
 	app.(internal.Expect).ExpectMetrics(t, []internal.WantMetric{
 		{Name: "OtherTransaction/all", Scope: "", Forced: true, Data: nil},
 		{Name: "OtherTransaction/Go/functionName", Scope: "", Forced: true, Data: nil},
+		{Name: "DurationByCaller/Unknown/Unknown/Unknown/Unknown/all", Scope: "", Forced: false, Data: nil},
+		{Name: "DurationByCaller/Unknown/Unknown/Unknown/Unknown/allOther", Scope: "", Forced: false, Data: nil},
 	})
 	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
 		Intrinsics: map[string]interface{}{
-			"name": "OtherTransaction/Go/functionName",
+			"name":     "OtherTransaction/Go/functionName",
+			"guid":     internal.MatchAnything,
+			"priority": internal.MatchAnything,
+			"sampled":  internal.MatchAnything,
+			"traceId":  internal.MatchAnything,
 		},
 		UserAttributes: map[string]interface{}{},
 		AgentAttributes: map[string]interface{}{
@@ -290,7 +327,11 @@ func TestAPIGatewayProxyResponse(t *testing.T) {
 
 	app.(internal.Expect).ExpectTxnEvents(t, []internal.WantEvent{{
 		Intrinsics: map[string]interface{}{
-			"name": "OtherTransaction/Go/functionName",
+			"name":     "OtherTransaction/Go/functionName",
+			"guid":     internal.MatchAnything,
+			"priority": internal.MatchAnything,
+			"sampled":  internal.MatchAnything,
+			"traceId":  internal.MatchAnything,
 		},
 		UserAttributes: map[string]interface{}{},
 		AgentAttributes: map[string]interface{}{
