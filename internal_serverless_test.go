@@ -286,3 +286,52 @@ func BenchmarkServerlessJSON(b *testing.B) {
 		txn.(serverlessTransaction).serverlessJSON("executionEnv")
 	}
 }
+
+func validSampler(s internal.AdaptiveSampler) bool {
+	_, isSampleEverything := s.(internal.SampleEverything)
+	_, isSampleNothing := s.(internal.SampleEverything)
+	return (nil != s) && !isSampleEverything && !isSampleNothing
+}
+
+func TestServerlessConnectReply(t *testing.T) {
+	cfg := NewConfig("", "")
+	cfg.ServerlessMode.ApdexThreshold = 2 * time.Second
+	cfg.ServerlessMode.AccountID = "the-account-id"
+	cfg.ServerlessMode.TrustedAccountKey = "the-trust-key"
+	cfg.ServerlessMode.PrimaryAppID = "the-primary-app"
+	reply := newServerlessConnectReply(cfg)
+	if reply.ApdexThresholdSeconds != 2 {
+		t.Error(reply.ApdexThresholdSeconds)
+	}
+	if reply.AccountID != "the-account-id" {
+		t.Error(reply.AccountID)
+	}
+	if reply.TrustedAccountKey != "the-trust-key" {
+		t.Error(reply.TrustedAccountKey)
+	}
+	if reply.PrimaryAppID != "the-primary-app" {
+		t.Error(reply.PrimaryAppID)
+	}
+	if !validSampler(reply.AdaptiveSampler) {
+		t.Error(reply.AdaptiveSampler)
+	}
+
+	// Now test the defaults:
+	cfg = NewConfig("", "")
+	reply = newServerlessConnectReply(cfg)
+	if reply.ApdexThresholdSeconds != 0.5 {
+		t.Error(reply.ApdexThresholdSeconds)
+	}
+	if reply.AccountID != "" {
+		t.Error(reply.AccountID)
+	}
+	if reply.TrustedAccountKey != "" {
+		t.Error(reply.TrustedAccountKey)
+	}
+	if reply.PrimaryAppID != "Unknown" {
+		t.Error(reply.PrimaryAppID)
+	}
+	if !validSampler(reply.AdaptiveSampler) {
+		t.Error(reply.AdaptiveSampler)
+	}
+}
