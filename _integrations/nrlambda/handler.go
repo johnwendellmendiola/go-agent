@@ -23,8 +23,6 @@ func (r *responseShim) Header() http.Header       { return r.header }
 func (r *responseShim) Write([]byte) (int, error) { return 0, nil }
 func (r *responseShim) WriteHeader(int)           {}
 
-type responseShimKey struct{}
-
 func requestEvent(ctx context.Context, event interface{}) {
 	txn := newrelic.FromContext(ctx)
 
@@ -52,22 +50,19 @@ func responseEvent(ctx context.Context, event interface{}) {
 	if nil == txn {
 		return
 	}
-	rw, ok := ctx.Value(responseShimKey{}).(*responseShim)
-	if !ok {
-		return
-	}
+	rw := &responseShim{}
 	rw.header = make(http.Header, len(proxyResponse.Headers))
 	for k, v := range proxyResponse.Headers {
 		rw.header.Add(k, v)
 	}
+	txn.SetWebResponse(rw)
 	if 0 != proxyResponse.StatusCode {
 		txn.WriteHeader(proxyResponse.StatusCode)
 	}
 }
 
 func (h *wrappedHandler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
-	rw := &responseShim{}
-	txn := h.app.StartTransaction(h.functionName, rw, nil)
+	txn := h.app.StartTransaction(h.functionName, nil, nil)
 	defer txn.End()
 
 	if aa, ok := txn.(internal.AddAgentAttributer); ok {
@@ -86,7 +81,6 @@ func (h *wrappedHandler) Invoke(ctx context.Context, payload []byte) ([]byte, er
 		RequestEvent:  requestEvent,
 		ResponseEvent: responseEvent,
 	})
-	ctx = context.WithValue(ctx, responseShimKey{}, rw)
 
 	response, err := h.original.Invoke(ctx, payload)
 
