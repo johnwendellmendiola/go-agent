@@ -8,20 +8,22 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	newrelic "github.com/newrelic/go-agent"
 	"github.com/newrelic/go-agent/internal"
 )
 
-type responseShim struct{ header http.Header }
+type response struct {
+	header http.Header
+	code   int
+}
 
-var _ http.ResponseWriter = &responseShim{}
+var _ http.ResponseWriter = &response{}
 
-func (r *responseShim) Header() http.Header       { return r.header }
-func (r *responseShim) Write([]byte) (int, error) { return 0, nil }
-func (r *responseShim) WriteHeader(int)           {}
+func (r *response) Header() http.Header       { return r.header }
+func (r *response) Write([]byte) (int, error) { return 0, nil }
+func (r *response) WriteHeader(int)           {}
 
 func requestEvent(ctx context.Context, event interface{}) {
 	txn := newrelic.FromContext(ctx)
@@ -36,28 +38,19 @@ func requestEvent(ctx context.Context, event interface{}) {
 		}
 	}
 
-	if request, ok := event.(events.APIGatewayProxyRequest); ok {
-		txn.SetWebRequest(proxyRequest{request: request})
+	if request := eventWebRequest(event); nil != request {
+		txn.SetWebRequest(request)
 	}
 }
 
 func responseEvent(ctx context.Context, event interface{}) {
-	proxyResponse, ok := event.(events.APIGatewayProxyResponse)
-	if !ok {
-		return
-	}
 	txn := newrelic.FromContext(ctx)
 	if nil == txn {
 		return
 	}
-	rw := &responseShim{}
-	rw.header = make(http.Header, len(proxyResponse.Headers))
-	for k, v := range proxyResponse.Headers {
-		rw.header.Add(k, v)
-	}
-	txn.SetWebResponse(rw)
-	if 0 != proxyResponse.StatusCode {
-		txn.WriteHeader(proxyResponse.StatusCode)
+	if rw := eventResponse(event); nil != rw && 0 != rw.code {
+		txn.SetWebResponse(rw)
+		txn.WriteHeader(rw.code)
 	}
 }
 

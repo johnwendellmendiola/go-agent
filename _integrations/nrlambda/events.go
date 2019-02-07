@@ -41,40 +41,84 @@ func getEventSourceARN(event interface{}) string {
 	return ""
 }
 
-type proxyRequest struct{ request events.APIGatewayProxyRequest }
-
-func (r proxyRequest) Header() http.Header {
-	// In the future there might be a method to do this:
-	// https://github.com/aws/aws-lambda-go/issues/131
-	h := make(http.Header, len(r.request.Headers))
-	for k, v := range r.request.Headers {
-		h.Set(k, v)
-	}
-	return h
+type webRequest struct {
+	header    http.Header
+	method    string
+	u         *url.URL
+	transport newrelic.TransportType
 }
 
-func (r proxyRequest) URL() *url.URL {
+func (r webRequest) Header() http.Header               { return r.header }
+func (r webRequest) URL() *url.URL                     { return r.u }
+func (r webRequest) Method() string                    { return r.method }
+func (r webRequest) Transport() newrelic.TransportType { return r.transport }
+
+func eventWebRequest(event interface{}) newrelic.WebRequest {
+	var path string
+	var request webRequest
+	var headers map[string]string
+
+	switch r := event.(type) {
+	case events.APIGatewayProxyRequest:
+		request.method = r.HTTPMethod
+		path = r.Path
+		headers = r.Headers
+	case events.ALBTargetGroupRequest:
+		// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/lambda-functions.html#receive-event-from-load-balancer
+		request.method = r.HTTPMethod
+		path = r.Path
+		headers = r.Headers
+	default:
+		return nil
+	}
+
+	request.header = make(http.Header, len(headers))
+	for k, v := range headers {
+		request.header.Set(k, v)
+	}
+
 	var host string
-	if port := r.request.Headers["X-Forwarded-Port"]; port != "" {
+	if port := request.header.Get("X-Forwarded-Port"); port != "" {
 		host = ":" + port
 	}
-	return &url.URL{
-		Path: r.request.Path,
+	request.u = &url.URL{
+		Path: path,
 		Host: host,
 	}
-}
 
-func (r proxyRequest) Method() string {
-	return r.request.HTTPMethod
-}
-
-func (r proxyRequest) Transport() newrelic.TransportType {
-	proto := strings.ToLower(r.request.Headers["X-Forwarded-Proto"])
+	proto := strings.ToLower(request.header.Get("X-Forwarded-Proto"))
 	switch proto {
 	case "https":
-		return newrelic.TransportHTTPS
+		request.transport = newrelic.TransportHTTPS
 	case "http":
-		return newrelic.TransportHTTP
+		request.transport = newrelic.TransportHTTP
+	default:
+		request.transport = newrelic.TransportUnknown
 	}
-	return newrelic.TransportUnknown
+
+	return request
+}
+
+func eventResponse(event interface{}) *response {
+	var code int
+	var headers map[string]string
+
+	switch r := event.(type) {
+	case events.APIGatewayProxyResponse:
+		code = r.StatusCode
+		headers = r.Headers
+	case events.ALBTargetGroupResponse:
+		code = r.StatusCode
+		headers = r.Headers
+	default:
+		return nil
+	}
+	hdr := make(http.Header, len(headers))
+	for k, v := range headers {
+		hdr.Add(k, v)
+	}
+	return &response{
+		code:   code,
+		header: hdr,
+	}
 }

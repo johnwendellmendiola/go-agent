@@ -67,39 +67,150 @@ func TestGetEventAttributes(t *testing.T) {
 	}
 }
 
-func TestProxyRequestWrapping(t *testing.T) {
-	// First test an empty APIGatewayProxyRequest
-	req := proxyRequest{}
+func TestEventWebRequest(t *testing.T) {
+	// First test a type that does not count as a web request.
+	req := eventWebRequest(22)
+	if nil != req {
+		t.Error(req)
+	}
 
-	if h := req.Header(); len(h) != 0 {
-		t.Error(h)
+	testcases := []struct {
+		testname   string
+		input      interface{}
+		numHeaders int
+		method     string
+		urlString  string
+		transport  newrelic.TransportType
+	}{
+		{
+			testname:   "empty proxy request",
+			input:      events.APIGatewayProxyRequest{},
+			numHeaders: 0,
+			method:     "",
+			urlString:  "",
+			transport:  newrelic.TransportUnknown,
+		},
+		{
+			testname: "populated proxy request",
+			input: events.APIGatewayProxyRequest{
+				Headers: map[string]string{
+					"x-forwarded-port":  "4000",
+					"x-forwarded-proto": "HTTPS",
+				},
+				HTTPMethod: "GET",
+				Path:       "the/path",
+			},
+			numHeaders: 2,
+			method:     "GET",
+			urlString:  "//:4000/the/path",
+			transport:  newrelic.TransportHTTPS,
+		},
+		{
+			testname:   "empty alb request",
+			input:      events.ALBTargetGroupRequest{},
+			numHeaders: 0,
+			method:     "",
+			urlString:  "",
+			transport:  newrelic.TransportUnknown,
+		},
+		{
+			testname: "populated alb request",
+			input: events.ALBTargetGroupRequest{
+				Headers: map[string]string{
+					"x-forwarded-port":  "3000",
+					"x-forwarded-proto": "HttP",
+				},
+				HTTPMethod: "GET",
+				Path:       "the/path",
+			},
+			numHeaders: 2,
+			method:     "GET",
+			urlString:  "//:3000/the/path",
+			transport:  newrelic.TransportHTTP,
+		},
 	}
-	if u := req.URL().String(); u != "" {
-		t.Error(u)
+
+	for _, tc := range testcases {
+		req = eventWebRequest(tc.input)
+		if req == nil {
+			t.Error(tc.testname, "no request returned")
+			continue
+		}
+		if h := req.Header(); len(h) != tc.numHeaders {
+			t.Error(tc.testname, "header len mismatch", h, tc.numHeaders)
+		}
+		if u := req.URL().String(); u != tc.urlString {
+			t.Error(tc.testname, "url mismatch", u, tc.urlString)
+		}
+		if m := req.Method(); m != tc.method {
+			t.Error(tc.testname, "method mismatch", m, tc.method)
+		}
+		if tr := req.Transport(); tr != tc.transport {
+			t.Error(tc.testname, "transport mismatch", tr, tc.transport)
+		}
 	}
-	if m := req.Method(); m != "" {
-		t.Error(m)
+}
+
+func TestEventResponse(t *testing.T) {
+	// First test a type that does not count as a web request.
+	resp := eventResponse(22)
+	if nil != resp {
+		t.Error(resp)
 	}
-	if tr := req.Transport(); tr != newrelic.TransportUnknown {
-		t.Error(tr)
+
+	testcases := []struct {
+		testname   string
+		input      interface{}
+		numHeaders int
+		code       int
+	}{
+		{
+			testname:   "empty proxy response",
+			input:      events.APIGatewayProxyResponse{},
+			numHeaders: 0,
+			code:       0,
+		},
+		{
+			testname: "populated proxy response",
+			input: events.APIGatewayProxyResponse{
+				StatusCode: 200,
+				Headers: map[string]string{
+					"x-custom-header": "my custom header value",
+				},
+			},
+			numHeaders: 1,
+			code:       200,
+		},
+		{
+			testname:   "empty alb response",
+			input:      events.ALBTargetGroupResponse{},
+			numHeaders: 0,
+			code:       0,
+		},
+		{
+			testname: "populated alb response",
+			input: events.ALBTargetGroupResponse{
+				StatusCode: 200,
+				Headers: map[string]string{
+					"x-custom-header": "my custom header value",
+				},
+			},
+			numHeaders: 1,
+			code:       200,
+		},
 	}
-	// Now test a populated request.
-	req.request.Headers = map[string]string{
-		"X-Forwarded-Port":  "4000",
-		"X-Forwarded-Proto": "HTTPS",
-	}
-	req.request.HTTPMethod = "GET"
-	req.request.Path = "the/path"
-	if h := req.Header(); len(h) != 2 {
-		t.Error(h)
-	}
-	if u := req.URL().String(); u != "//:4000/the/path" {
-		t.Error(u)
-	}
-	if m := req.Method(); m != "GET" {
-		t.Error(m)
-	}
-	if tr := req.Transport(); tr != newrelic.TransportHTTPS {
-		t.Error(tr)
+
+	for _, tc := range testcases {
+		resp = eventResponse(tc.input)
+		if resp == nil {
+			t.Error(tc.testname, "no response returned")
+			continue
+		}
+		if h := resp.Header(); len(h) != tc.numHeaders {
+			t.Error(tc.testname, "header len mismatch", h, tc.numHeaders)
+		}
+		if resp.code != tc.code {
+			t.Error(tc.testname, "status code mismatch", resp.code, tc.code)
+		}
 	}
 }
